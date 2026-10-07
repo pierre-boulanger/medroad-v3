@@ -1,0 +1,148 @@
+# MedROAD V3 — Docker Compose
+# Brings up: OpenEMR + MariaDB, Zookeeper + Kafka, and MedROAD services.
+# Usage:
+#   docker compose up -d            # start all
+#   docker compose logs -f webhook  # tail webhook logs
+#   docker compose down -v          # stop and remove volumes
+
+services:
+
+  # ── Database ──────────────────────────────────────────────────────────────
+  mariadb:
+    image: mariadb:10.11
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      # Root must be reachable from the OpenEMR container, which connects from
+      # a different address. Without this the installer fails with
+      # "unable to connect to database as root".
+      MYSQL_ROOT_HOST:     '%'
+      MYSQL_DATABASE:      openemr
+      MYSQL_USER:          openemr
+      MYSQL_PASSWORD:      openemr
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mariadb-admin", "ping", "-h", "localhost",
+             "-u", "root", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ── OpenEMR ───────────────────────────────────────────────────────────────
+  openemr:
+    image: openemr/openemr:7.0.2
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    ports:
+      - "8300:80"
+    environment:
+      MYSQL_HOST:      mariadb
+      MYSQL_ROOT_PASS: root
+      MYSQL_USER:      openemr
+      MYSQL_PASS:      openemr
+      MYSQL_DATABASE:  openemr
+      OE_USER:         admin
+      OE_PASS:         Admin1234!
+      # Turn the APIs on at install time. Doing it here avoids a manual pass
+      # through Administration -> Config -> Connectors after first boot.
+      OPENEMR_SETTING_rest_api:               1
+      OPENEMR_SETTING_rest_fhir_api:          1
+      OPENEMR_SETTING_rest_system_scopes_api: 1
+      OPENEMR_SETTING_oauth_password_grant:   3
+    volumes:
+      - openemr_sites:/var/www/localhost/htdocs/openemr/sites
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/apis/default/fhir/metadata"]
+      interval: 30s
+      timeout: 10s
+      retries: 20
+      # First boot installs the schema and can take 3-5 minutes.
+      start_period: 240s
+
+  # ── Zookeeper ─────────────────────────────────────────────────────────────
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME:   2000
+    volumes:
+      - zk_data:/var/lib/zookeeper/data
+      - zk_log:/var/lib/zookeeper/log
+
+  # ── Kafka ─────────────────────────────────────────────────────────────────
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    depends_on: [zookeeper]
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID:                       1
+      KAFKA_ZOOKEEPER_CONNECT:               zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP:  PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS:            PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE:       "true"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  # ── MedROAD V3: Webhook receiver ─────────────────────────────────────────
+  webhook:
+    build: .
+    command: python -m medroad_v3.main webhook
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8001:8001"
+    env_file: .env
+    environment:
+      KAFKA_BOOTSTRAP:  kafka:29092
+      WEBHOOK_HOST:     0.0.0.0
+      WEBHOOK_PORT:     "8001"
+    volumes:
+      - ./models_saved:/app/models_saved
+    restart: unless-stopped
+
+  # ── MedROAD V3: Faust stream processor ───────────────────────────────────
+  stream:
+    build: .
+    command: python -m medroad_v3.main stream
+    depends_on:
+      kafka:
+        condition: service_healthy
+      openemr:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      KAFKA_BOOTSTRAP: kafka:29092
+      FAUST_BROKER:    kafka://kafka:29092
+    volumes:
+      - ./models_saved:/app/models_saved
+    restart: unless-stopped
+
+  # ── Subscription setup (one-shot) ─────────────────────────────────────────
+  setup:
+    build: .
+    command: python -m medroad_v3.main setup
+    depends_on:
+      openemr:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      OPENEMR_BASE_URL: http://openemr:80
+      WEBHOOK_URL:      http://webhook:8001/fhir/webhook
+    profiles: ["setup"]   # Only run with: docker compose --profile setup up setup
+
+
+volumes:
+  mariadb_data:
+  openemr_sites:
+  zk_data:
+  zk_log:
+  kafka_data:

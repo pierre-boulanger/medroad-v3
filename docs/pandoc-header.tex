@@ -1,0 +1,21 @@
+\usepackage{fancyhdr}
+\usepackage{xcolor}
+\definecolor{codebg}{RGB}{246,247,249}
+\definecolor{codeframe}{RGB}{214,218,224}
+\definecolor{linkblue}{RGB}{20,70,140}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\footnotesize MedROAD V3 — Installation and Operation}
+\fancyhead[R]{\footnotesize\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\setlength{\headheight}{13pt}
+% readable, boxed code blocks
+\usepackage{fvextra}
+\fvset{breaklines=true, breakanywhere=true, fontsize=\small}
+\usepackage{mdframed}
+\surroundwithmdframed[
+  backgroundcolor=codebg, linecolor=codeframe, linewidth=0.5pt,
+  innertopmargin=5pt, innerbottommargin=5pt,
+  innerleftmargin=7pt, innerrightmargin=7pt, roundcorner=2pt
+]{Highlighting}
+\usepackage{booktabs}

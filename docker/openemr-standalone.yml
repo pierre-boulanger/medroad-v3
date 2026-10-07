@@ -1,0 +1,72 @@
+# OpenEMR + MariaDB only, without the MedROAD services.
+#
+# Use when you want an OpenEMR instance to develop or test against without
+# running Kafka and the MedROAD containers, or when OpenEMR lives on a
+# different host from the pipeline.
+#
+#   docker compose -f docker/openemr-standalone.yml up -d
+#   docker compose -f docker/openemr-standalone.yml logs -f openemr
+#   docker compose -f docker/openemr-standalone.yml down -v    # wipes the DB
+#
+# Then point MedROAD at it with OPENEMR_BASE_URL in .env.
+
+services:
+
+  mariadb:
+    image: mariadb:10.11
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      # OpenEMR connects from another container, so root must be reachable
+      # from any host. Without this the installer reports
+      # "unable to connect to database as root".
+      MYSQL_ROOT_HOST:     '%'
+      MYSQL_DATABASE:      openemr
+      MYSQL_USER:          openemr
+      MYSQL_PASSWORD:      openemr
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mariadb-admin", "ping", "-h", "localhost",
+             "-u", "root", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  openemr:
+    image: openemr/openemr:7.0.2
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    ports:
+      - "8300:80"
+      - "8301:443"
+    environment:
+      MYSQL_HOST:      mariadb
+      MYSQL_ROOT_PASS: root
+      MYSQL_USER:      openemr
+      MYSQL_PASS:      openemr
+      MYSQL_DATABASE:  openemr
+      OE_USER:         admin
+      OE_PASS:         Admin1234!
+      # APIs on at install time, so no manual pass through
+      # Administration -> Config -> Connectors is needed afterwards.
+      OPENEMR_SETTING_rest_api:               1
+      OPENEMR_SETTING_rest_fhir_api:          1
+      OPENEMR_SETTING_rest_system_scopes_api: 1
+      OPENEMR_SETTING_oauth_password_grant:   3
+    volumes:
+      - openemr_sites:/var/www/localhost/htdocs/openemr/sites
+    healthcheck:
+      test: ["CMD", "curl", "-f",
+             "http://localhost/apis/default/fhir/metadata"]
+      interval: 30s
+      timeout: 10s
+      retries: 20
+      # First boot installs the schema; allow 4 minutes before unhealthy.
+      start_period: 240s
+    restart: unless-stopped
+
+volumes:
+  mariadb_data:
+  openemr_sites:

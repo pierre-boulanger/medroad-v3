@@ -1,0 +1,50 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite both the software and the paper."
+title: "MedROAD V3: Multi-Modal FHIR Sensor Fusion for Real-Time Clinical Decision Support"
+abstract: >-
+  Reference implementation of MedROAD V3, a real-time closed-loop FHIR R4
+  streaming architecture for multi-modal sensor fusion in clinical decision
+  support. Integrates OpenEMR, Apache Kafka, and a calibrated XGBoost-LSTM-
+  Transformer ensemble with SHAP explainability and LLM-generated bedside
+  narratives, with a documented extension path to remote patient monitoring.
+type: software
+version: 2.0.0
+license: MIT
+repository-code: "https://github.com/pboulanger/medroad-v3"
+keywords:
+  - FHIR
+  - sensor fusion
+  - telemedicine
+  - remote patient monitoring
+  - clinical decision support
+  - explainable AI
+  - stream processing
+
+authors:
+  - family-names: Boulanger
+    given-names: Pierre
+    email: pierreb@ualberta.ca
+    affiliation: "University of Alberta"
+    # orcid: "https://orcid.org/0000-0000-0000-0000"   # TODO: add ORCID
+
+preferred-citation:
+  type: article
+  title: >-
+    Multi-Modal FHIR Sensor Fusion for Real-Time Clinical Decision Support:
+    From Hospital Bedside to Remote Patient Monitoring
+  authors:
+    - family-names: Boulanger
+      given-names: Pierre
+      affiliation: "University of Alberta"
+  journal: "Sensors"
+  publisher:
+    name: MDPI
+  year: 2026
+  # Special Issue: Sensor Fusion for Telemedicine — Advancing Remote
+  # Healthcare Through Multi-Modal Data Integration
+  #
+  # TODO: fill in on acceptance
+  # volume:
+  # issue:
+  # start:
+  # doi:
